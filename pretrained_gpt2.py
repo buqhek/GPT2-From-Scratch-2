@@ -2,11 +2,10 @@
 import torch
 import torch.nn.functional as F
 from gpt2 import GPT
+from dataloader import DataLoaderLite
 import sys
 
 def main():
-    """If this code runs and produces good coherent text, then the model is working and we have nearly identically the same model as the HuggingFace Transformers GPT2 model."""
-    # attempt to auto detect the device including cuda and mps and cpu
     if torch.backends.mps.is_available():
         device = torch.device("mps")
     elif torch.cuda.is_available():
@@ -26,21 +25,34 @@ def main():
         print(f'Training file provided: {args[idx + 1]}')
         exit(1)
         train_file = args[idx + 1]
-        # TODO: Implement training code/flag here
-
-    if '--manual' in args:  # manual writing mode
+        with open(train_file, 'r') as train:
+            train_file = train.read()
+        training_mode = True
+    elif '--manual' in args:  # manual writing mode
         manual_mode = True
-    exit(0)
-
 
     model = GPT.from_pretrained('gpt2')
-    print("Model loaded successfully.")
-
+    model.to(device)
     num_return_sequences = 1
     max_length = 30
 
+    # Model Training Phase
+    if training_mode:
+        B, T = 8, 512
+        train_loader = DataLoaderLite(B, T)
+        epochs = 1
+
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        for i in range(epochs):
+            x, y = train_loader.next_batch()
+            x, y = x.to(device), y.to(device)
+            optimizer.zero_grad()
+            logits, loss = model(x, targets=y)
+            loss.backward()
+            optimizer.step()
+            print(f"Epoch {i+1}, Loss: {loss.item()}")
+
     model.eval()
-    model.to(device)
 
     import tiktoken
     enc = tiktoken.get_encoding("gpt2")
